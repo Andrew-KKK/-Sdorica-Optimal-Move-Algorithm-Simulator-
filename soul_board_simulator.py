@@ -30,7 +30,7 @@ class SoulOrbSimulator:
     - 操作 (Operations): 接受座標列表，並進行嚴格的顏色與形狀檢查。
     """
 
-    def __init__(self):
+    def __init__(self, skills: List[str] = None, orb_bonus: int = 9):
         self.rows = 2
         self.cols = 7
         self.board: List[List[SoulOrb]] = []
@@ -43,10 +43,12 @@ class SoulOrbSimulator:
             "1-orb": frozenset([(0, 0)]),
             
             # 2-orb (垂直 1x2)
-            "2-orb-v": frozenset([(0, 0), (1, 0)]),
+            # [Fix] 改用底線 _ 分隔，以便與群組邏輯相容 (2-orb_v -> 2-orb)
+            "2-orb_v": frozenset([(0, 0), (1, 0)]),
             
             # 2-orb (水平 1x2)
-            "2-orb-h": frozenset([(0, 0), (0, 1)]),
+            # [Fix] 改用底線 _ 分隔 (2-orb_h -> 2-orb)
+            "2-orb_h": frozenset([(0, 0), (0, 1)]),
             
             # 3-orb (L 形, 2x2 缺少一個角落)
             "3-orb-L_no_tl": frozenset([(0, 1), (1, 0), (1, 1)]), # 缺左上
@@ -82,23 +84,12 @@ class SoulOrbSimulator:
 
         # --- AI 演算法的超參數 ---
         
-        # 1. 挖掘 (Exploitation) 的優先序 (未来 AI 會使用)
-        # 範例 (您未來可以傳入這個)
-        # self.PRIORITY_LIST = {
-        #    "1-orb": 10,
-        #    "2-orb": 50, # 2-orb (v/h) 的群組優先序
-        #    "4-orb-square": 100,
-        #    "4-orb-L": 80,
-        #    "4-orb-I": 80,
-        # }
-        
         # 2. 探索 (Exploration) 的基礎獎勵
-        # (根據您的洞察，這是一個理想設定值，與 1-orb 綁定)
         # 假設 1-orb 的 priority 是 10，我們設定 9
         self.ORB_COUNT_BONUS = 9 
 
-        # 初始化魂盤
-        self.initialize_board()
+        # 初始化魂盤，並傳入參數
+        self.initialize_board(skills, orb_bonus)
 
     # --- 魂芯建立 (Refinement 3) ---
     def _create_orb(self, mode: str) -> Union[SoulOrb, List[List[SoulOrb]]]:
@@ -146,7 +137,7 @@ class SoulOrbSimulator:
         if skills:
             self.set_valid_skills(skills)
         else:
-            # 預設 "2-orb" 會自動匹配 "2-orb-v" 和 "2-orb-h"
+            # 預設 "2-orb" 會自動匹配 "2-orb_v" 和 "2-orb_h"
             # 預設 "4-orb-square" 是標準的 4 消
             self.set_valid_skills(["1-orb", "2-orb", "4-orb-square"])
             
@@ -160,9 +151,6 @@ class SoulOrbSimulator:
         設定此模擬器當前允許的消除形狀。
         """
         self.valid_skills = set(skill_names)
-        # 檢查是否有未知的技能名稱 (現在允許群組名稱)
-        # for name in self.valid_skills:
-        #    ... (檢查邏輯可以更複雜, 但目前暫時移除)
 
     def display_board(self):
         """
@@ -233,28 +221,9 @@ class SoulOrbSimulator:
     def _validate_shape(self, coords: List[Tuple[int, int]]) -> str:
         """
         (檢查 2) 驗證座標列表是否構成一個有效且被允許的形狀。
-        (已更新，支援群組驗證並修正正規化邏輯)
-        
-        此函式執行三個步驟：
-        1. 正規化(Normalize): 將輸入的絕對座標 (e.g., [(1, 3), (1, 4), (1, 2)]) 
-           轉換為以 (0,0) 為基準點的相對座標集合 (e.g., {(1, 1), (1, 2), (1, 0)})。
-           
-        2. 匹配(Match): 將這個正規化的集合與 `self.SHAPE_TEMPLATES` 
-           中的所有模板進行比對，找出其「具體形狀名稱」 (e.g., "4-orb-L_1")。
-           
-        3. 驗證(Validate): 檢查這個「具體形狀名稱」是否被 `self.valid_skills` 
-           列表所允許。此驗證支援「群組名稱」 (e.g., "4-orb-L") 和
-           「任意形」 (e.g., "4-orb-any")。
-           
-        :return: 具體的形狀名稱 (e.g., "4-orb-L_1", "4-orb-I_h")
-        :raises ValueError: 如果形狀不合法，或形狀不被 `valid_skills` 允許。
         """
         
         # --- 步驟 1: 正規化 (Normalize) 形狀 ---
-        
-        # (修正) 找到真正的左上角基準點 (min_r, min_c)，
-        # 而不是依賴排序 (sorted)。
-        # 這能正確處理所有 L 形的鏡像
         if not coords:
             raise ValueError("座標列表為空")
             
@@ -264,67 +233,48 @@ class SoulOrbSimulator:
         
         normalized_set = set()
         for r, c in coords:
-            # 將所有座標轉換為相對於 origin 的座標
-            # e.g., (1, 3) (origin (1,2)) -> (0, 1)
-            # e.g., (1, 4) (origin (1,2)) -> (0, 2)
-            # e.g., (1, 2) (origin (1,2)) -> (0, 0)
             normalized_set.add((r - origin_r, c - origin_c))
         
-        # 轉換為 frozenset (不可變集合)，以便在字典中進行比對
         normalized_frozenset = frozenset(normalized_set)
 
         # --- 步驟 2: 在模板中尋找該形狀 ---
         specific_shape_name = None
         for name, template in self.SHAPE_TEMPLATES.items():
-            # 比對正規化的使用者形狀和模板
             if template == normalized_frozenset:
                 specific_shape_name = name # 找到了！ e.g., "4-orb-L_1"
                 break
         
-        # 如果遍歷完所有模板都找不到
         if specific_shape_name is None:
-            # 為了除錯，顯示正規化後的形狀
             raise ValueError(f"無效的魂芯形狀：{sorted(coords)} (正規化為: {normalized_frozenset})")
         
         # --- 步驟 3: 檢查該形狀是否在 valid_skills 列表中 (支援群組) ---
         
         # 檢查 3a: 檢查具體名稱
-        # e.g., 檢查 "4-orb-L_1" 是否在 valid_skills 集合中
         if specific_shape_name in self.valid_skills:
             return specific_shape_name
 
         # 檢查 3b: 檢查群組名稱
-        # e.g., 檢查 "4-orb-L" 是否在 valid_skills 集合中
-        
-        # 範例: "4-orb-L_1" -> "4-orb-L"
-        # 範例: "4-orb-I_h" -> "4-orb-I"
-        # 範例: "4-orb-square" -> "4-orb-square" (群組名稱就是它自己)
-        
-        # 我們使用 `rsplit` (從右側分割) 來確保分割正確
+        # e.g. "2-orb_v" -> "2-orb"
         parts = specific_shape_name.rsplit('_', 1)
         
-        # 取得群組名稱 (如果分割成功，取 part[0]，否則取原名)
         group_name = parts[0] if len(parts) > 1 else specific_shape_name
         
         if group_name in self.valid_skills:
-            # 驗證群組成功 (e.g., valid_skills 包含 "4-orb-L")
-            return specific_shape_name # 返回具體形狀 "4-orb-L_1"
+            return specific_shape_name 
 
-        # 檢查 3c: 檢查 "任意形" (e.g., "4-orb-any" in valid_skills)
+        # 檢查 3c: 檢查 "任意形"
         orb_count = len(coords)
-        any_group_name = f"{orb_count}-orb-any" # e.g., "4-orb-any"
+        any_group_name = f"{orb_count}-orb-any"
         
         if any_group_name in self.valid_skills:
-            # 驗證 "any" 成功 (e.g., valid_skills 包含 "4-orb-any")
-            return specific_shape_name # 返回具體形狀 "4-orb-I_h"
+            return specific_shape_name
 
-        # 如果所有檢查都失敗
         raise ValueError(
             f"形狀 '{specific_shape_name}' (群組: {group_name}) 雖然合法，"
             f"但不在當前 valid_skills 允許的操作列表中 ({self.valid_skills})。"
         )
 
-    # --- G結算 (Refinement 3) ---
+    # --- 結算 ---
     def eliminate(self, coords_to_eliminate: List[Tuple[int, int]]):
         """
         將指定的魂芯標記為 'EMPTY'。
@@ -336,60 +286,37 @@ class SoulOrbSimulator:
     def resolve_board(self):
         """
         2. resolve 的魂芯回填。
-        Sdorica 魂盤的重力是向左的, 是從右側回填的。
         包含 重力(Gravity) 和 生成(Generation) 兩個階段。
         """
-        
-        # 階段一：重力 (Gravity Pass - 向左)
-        # 遍歷每一排 (R0 和 R1)
+        # 階段一：重力 (向左)
         for r in range(self.rows):
-            # 使用一個 "write_pointer" (寫入指標) 來
-            # 追蹤下一個非空魂芯應該被放置的位置
             write_c = 0
             for read_c in range(self.cols):
                 if self.board[r][read_c].color != "EMPTY":
-                    # 如果當前讀取到的魂芯不是空的，
-                    # 把它移到 write_pointer 的位置
-                    
-                    # 避免不必要的自我賦值
                     if write_c != read_c:
                         self.board[r][write_c] = self.board[r][read_c]
-                    
-                    write_c += 1 # write_pointer 向右移動
-
-            # 階段一 (b): 將所有剩餘的欄位 (從 write_c 到結尾) 設為 EMPTY
-            # 這些是重力移動後留下的空位
+                    write_c += 1
             for c in range(write_c, self.cols):
                 self.board[r][c] = SoulOrb("EMPTY")
 
-        # 階段二：生成 (Generation Pass - 從右側回填)
-        # 遍歷所有欄位，從右側 (最右邊的 EMPTY) 開始回填
-        # 由於階段一，所有 EMPTY 都在右側，我們只需替換它們
+        # 階段二：生成 (從右側回填)
         for r in range(self.rows):
             for c in range(self.cols):
                 if self.board[r][c].color == "EMPTY":
-                    # M找到一個空位 (保證在右側)，
-                    # 立刻用 new 魂芯填補
-                    # 傳入 "REFILL" 模式
                     self.board[r][c] = self._create_orb("REFILL")
         
         print("  > 魂盤結算完成 (向左重力 + 從右回填)")
 
     def trigger_skill(self, shape_name: str, color: str):
-        """
-        (日誌) 觸發技能。
-        """
         print(f"[技能觸發] 形狀: {shape_name}, 顏色: {color}")
 
 
 # --- 範例使用 (Example Usage) ---
 if __name__ == "__main__":
     
-    # 建立一個模擬器
-    sim = SoulOrbSimulator()
-    
+    # 建立一個模擬器 (直接在建立時設定，避免雙重初始化)
     # 預設只允許 1, 2, 4-orb-square
-    sim.initialize_board(["1-orb", "2-orb", "4-orb-square"])
+    sim = SoulOrbSimulator(skills=["1-orb", "2-orb", "4-orb-square"])
     print(f"允許的技能: {sim.valid_skills}")
     sim.display_board()
 
@@ -409,7 +336,7 @@ if __name__ == "__main__":
     print("\n--- 測試 2 消 (水平) ---")
     # 手動設定顏色
     target_color_h = sim.board[0][3].color
-    sim.board[0][4] = target_color_h
+    sim.board[0][4] = SoulOrb(target_color_h)
     sim.display_board()
     
     # 執行操作
@@ -432,8 +359,6 @@ if __name__ == "__main__":
     
     # 座標順序不重要
     op_list_L = [(1, 4), (0, 2), (1, 2), (1, 3)] 
-    # 驗證: min_r=0, min_c=2. origin=(0,2)
-    # norm = {(0,0), (1,0), (1,1), (1,2)} -> 匹配 "4-orb-L_1"
     sim.handle_operation(op_list_L) # 預期成功
     sim.display_board()
     
