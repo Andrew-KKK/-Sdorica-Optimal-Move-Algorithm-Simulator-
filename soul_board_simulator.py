@@ -245,6 +245,6 @@ class SoulOrbSimulator:
 if __name__ == "__main__":
     print("=== 魂盤模擬器測試 ===")
     # 測試 1: 預設種子    
-    print("\n--- 測試 3: Seed = 99 (應與測試 1 不同) ---")
+    print("\n--- 測試 3: Seed = 99 ---")
     sim3 = SoulOrbSimulator(skills=["1-orb"], seed=99)
     sim3.display_board()
