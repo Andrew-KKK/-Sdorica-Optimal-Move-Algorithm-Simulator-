@@ -1,6 +1,15 @@
 import random
 from typing import List, Tuple, Set, Dict, FrozenSet, Union
 
+# --- 視覺化設定 (ANSI 顏色代碼) ---
+class Colors:
+    # 調整後的配色
+    GOLD = "\033[33m"    # 標準黃色 (較深，更像金色)
+    BLACK = "\033[94m"   # 亮藍色 (代表黑位 - 依您需求改為淺藍)
+    WHITE = "\033[97m"   # 亮白色 (代表白位)
+    RESET = "\033[0m"    # 重置顏色
+    BORDER = "\033[90m"  # 深灰色 (邊框用)
+
 # --- 魂芯物件 ---
 class SoulOrb:
     """
@@ -14,12 +23,34 @@ class SoulOrb:
 
     def __repr__(self) -> str:
         """
-        用於在控制台(console)中顯示魂盤的輔助函數。
+        預設的字串表示法 (用於除錯/純資料)。
+        回傳單一字元：G, B, W, .
         """
         if self.color == "EMPTY":
             return "."
-        # 只顯示顏色的第一個字母 (G, B, W)
-        return self.color[0]
+        return self.color[0] # G, B, W
+
+    def visual_repr(self) -> str:
+        """
+        視覺化的字串表示法 (用於漂亮輸出)。
+        為了相容性，我們顯示帶顏色的字母，而不是純方塊。
+        """
+        if self.color == "EMPTY":
+            return "   " # 3個空格
+        
+        # 設定對應顏色
+        color_code = Colors.WHITE
+        char = "W"
+        if self.color == "GOLD":
+            color_code = Colors.GOLD
+            char = "G"
+        elif self.color == "BLACK":
+            color_code = Colors.BLACK
+            char = "B"
+            
+        # 回傳彩色字母，例如 " G " (帶顏色)
+        # 前後加空格是為了在表格中居中
+        return f"{color_code} {char} {Colors.RESET}"
 
 # --- 魂盤模擬器 ---
 class SoulOrbSimulator:
@@ -127,12 +158,47 @@ class SoulOrbSimulator:
         """設定允許的消除形狀。"""
         self.valid_skills = set(skill_names)
 
-    def display_board(self):
-        """顯示當前魂盤狀態。"""
-        print("\n--- 魂盤 (Board) ---")
-        for r in range(self.rows):
-            print(f"R{r}: " + " ".join(str(self.board[r][c]) for c in range(self.cols)))
-        print("--------------------")
+    def display_board(self, output_format: str = "visual") -> str:
+        """
+        顯示或回傳當前魂盤狀態。
+        
+        :param output_format: 
+            "visual" (預設): 在終端機印出漂亮的彩色表格，並回傳 None。
+            "data": 回傳純文字資料字串 (e.g., "R0: G B ...\nR1: ...")，不印出。
+        :return: 若 format="data" 回傳字串，否則回傳 None (直接列印)。
+        """
+        if output_format == "data":
+            lines = []
+            for r in range(self.rows):
+                # 使用 __repr__ (G, B, W)
+                row_str = " ".join(str(self.board[r][c]) for c in range(self.cols))
+                lines.append(f"R{r}: {row_str}")
+            return "\n".join(lines)
+            
+        elif output_format == "visual":
+            b = Colors.BORDER
+            r = Colors.RESET
+            
+            # 繪製更寬的表格以容納 " G "
+            print(f"\n{b}╔═══{'╤═══'*6}╗{r}")
+            
+            # 顯示 Row 0 (頂層)
+            row0_cells = [self.board[0][c].visual_repr() for c in range(self.cols)]
+            row0_str = f"{b}║{r}" + f"{b}│{r}".join(row0_cells) + f"{b}║{r}"
+            print(row0_str)
+            
+            print(f"{b}╟───{'┼───'*6}╢{r}")
+            
+            # 顯示 Row 1 (底層)
+            row1_cells = [self.board[1][c].visual_repr() for c in range(self.cols)]
+            row1_str = f"{b}║{r}" + f"{b}│{r}".join(row1_cells) + f"{b}║{r}"
+            print(row1_str)
+            
+            print(f"{b}╚═══{'╧═══'*6}╝{r}")
+            return None
+            
+        else:
+            raise ValueError(f"未知的輸出格式: {output_format}")
 
     # --- 核心驗證邏輯 ---
     def _validate_colors(self, coords: List[Tuple[int, int]]) -> str:
@@ -207,7 +273,11 @@ class SoulOrbSimulator:
             print(f"[操作失敗] {e}")
             return False
 
-        print(f"[操作成功] 顏色: {base_color}, 形狀: {shape_name}")
+        # 顯示操作訊息 (增加一點顏色)
+        color_map = {"GOLD": Colors.GOLD, "BLACK": Colors.BLACK, "WHITE": Colors.WHITE}
+        c_code = color_map.get(base_color, Colors.RESET)
+        print(f"[操作成功] 顏色: {c_code}{base_color}{Colors.RESET}, 形狀: {shape_name}")
+        
         self.eliminate(operation_coords)
         self.resolve_board()
         self.trigger_skill(shape_name, base_color)
@@ -215,7 +285,7 @@ class SoulOrbSimulator:
 
     def eliminate(self, coords_to_eliminate: List[Tuple[int, int]]):
         """將指定魂芯設為 EMPTY。"""
-        print(f"  > 消除: {coords_to_eliminate}")
+        # print(f"  > 消除: {coords_to_eliminate}") # 為了版面整潔，可註解掉
         for r, c in coords_to_eliminate:
             self.board[r][c] = SoulOrb("EMPTY")
 
@@ -236,15 +306,18 @@ class SoulOrbSimulator:
                 if self.board[r][c].color == "EMPTY":
                     self.board[r][c] = self._create_orb("REFILL")
         
-        print("  > 魂盤結算完成 (向左重力 + 從右回填)")
+        # print("  > 魂盤結算完成 (向左重力 + 從右回填)")
 
     def trigger_skill(self, shape_name: str, color: str):
-        print(f"[技能觸發] 形狀: {shape_name}, 顏色: {color}")
+        # print(f"[技能觸發] 形狀: {shape_name}, 顏色: {color}")
+        pass
 
 # --- 測試區 ---
 if __name__ == "__main__":
-    print("=== 魂盤模擬器測試 ===")
-    # 測試 1: 預設種子    
-    print("\n--- 測試 3: Seed = 99 ---")
-    sim3 = SoulOrbSimulator(skills=["1-orb"], seed=99)
-    sim3.display_board()
+    print("--- 視覺效果測試 (visual) ---")
+    sim = SoulOrbSimulator(skills=["1-orb"], seed=42)
+    sim.display_board(output_format="visual")
+    
+    print("\n--- 純資料測試 (data) ---")
+    data_str = sim.display_board(output_format="data")
+    print(data_str)

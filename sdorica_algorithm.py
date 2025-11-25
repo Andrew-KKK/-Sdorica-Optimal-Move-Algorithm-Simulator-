@@ -120,6 +120,7 @@ class SdoricaSolver:
 
 # --- 測試區 ---
 if __name__ == "__main__":
+    print("=== 魂盤模擬器測試 ===")
     # 1. 初始化模擬器 (只負責規則)
     skills_to_test = ["1-orb", "2-orb", "4-orb-square", "4-orb-L", "4-orb-I"]
     sim = SoulOrbSimulator(skills=skills_to_test, seed=12345)
