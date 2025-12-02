@@ -22,7 +22,7 @@ class SdoricaSolver:
     def find_all_valid_moves(self, sim: SoulOrbSimulator) -> List[dict]:
         """
         窮舉當前魂盤上所有合法的操作。
-        (邏輯不變，只是從 sim 取得規則)
+        (邏輯不變，只是從 simulator 取得規則)
         """
         valid_moves = []
         seen_moves = set()

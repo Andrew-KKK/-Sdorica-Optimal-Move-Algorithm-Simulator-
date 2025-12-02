@@ -131,22 +131,22 @@ if __name__ == "__main__":
         "4-orb-L": 80, "4-orb-I": 80
     }
     
-    print("=== 初始化實驗 ===")
+    print("=== 測試: 初始化實驗 ===")
     controller.setup_experiment(seed=999, priority_list=my_priority, orb_bonus=9)
     controller.show_board() # 使用新的漂亮顯示
     
-    print("\n=== 執行單步 (Turn 1) ===")
+    print("\n=== 測試: 執行單步 (Turn 1) ===")
     res = controller.run_turn()
     print(f"結果: {res['action']}, 得分: {res['score']}")
     controller.show_board()
 
     # 測試純資料格式輸出
-    print("\n=== 測試純資料格式輸出 ===")
+    print("\n=== 測試:純資料格式輸出 ===")
     data_str = controller.get_board_state_str()
     print(data_str)
 
     # 連續執行測試
-    print("\n=== 自動執行 5 回合 ===")
+    print("\n=== 測試: 自動執行 5 回合 ===")
     results = controller.run_auto(5)
     for r in results:
         print(f"Turn {r['turn']}: {r['action']} (+{r['score']})")
