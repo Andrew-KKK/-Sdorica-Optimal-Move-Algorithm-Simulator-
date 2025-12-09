@@ -6,7 +6,7 @@ class SdoricaSolver:
     """
     Sdorica 最佳操作演算法求解器
     """
-    def __init__(self, priority_list: Dict[str, int] = None, orb_count_bonus: int = None):
+    def __init__(self, priority_list: Dict[str, int] = None, orb_count_bonus: int = None): # type: ignore
         """
         初始化求解器。
         

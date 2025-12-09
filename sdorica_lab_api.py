@@ -1,11 +1,11 @@
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 # 1. 從模擬器檔案匯入 模擬器類別 和 顏色設定
 # [修正] Colors 已更名為 OrbColor
-from soul_board_simulator import SoulOrbSimulator, OrbColor
+from soul_board_simulator import SoulOrbSimulator
 
 # 2. 從演算法檔案匯入 求解器類別
-from sdorica_algorithm import SdoricaSolver
+from move_algorithm import SdoricaSolver
 
 class SdoricaController:
     """
@@ -30,7 +30,7 @@ class SdoricaController:
                          seed: int, 
                          priority_list: Dict[str, int], 
                          orb_bonus: int = 9,
-                         skills: List[str] = None):
+                         skills: List[str] = []) -> None:
         """
         設定並初始化一個新的實驗。
         """

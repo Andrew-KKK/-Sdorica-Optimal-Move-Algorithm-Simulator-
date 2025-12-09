@@ -17,14 +17,14 @@
   * **群組驗證**：支援如 4-orb-L 的群組指令，自動匹配所有旋轉變體。  
 * **視覺化輸出**：支援終端機 (Terminal) 的 ANSI 彩色輸出，直觀顯示 金/黑/白 魂芯。
 
-### **2. 決策演算法 (`sdorica_algorithm.py`)**
+### **2. 決策演算法 (`move_algorithm.py`)**
 
 目前的實作採用 **貪婪策略 (Greedy Strategy)**，其決策邏輯基於兩個維度：
 
 * **挖掘 (Exploitation)**：根據使用者定義的 `PRIORITY_LIST`（例如 4 消 > 2 消 > 1 消）來評估操作價值。  
 * **探索 (Exploration)**：引入 `ORB_COUNT_BONUS` 機制，獎勵消除魂芯的行為，防止演算法在低分盤面中陷入僵局，鼓勵觸發隨機回填。
 
-### **3. 實驗控制器 (sdorica_api_controller.py)**
+### **3. 實驗控制器 (sdorica_lab_api.py`)**
 
 作為使用者與底層邏輯的中介 API，提供：
 
@@ -32,7 +32,7 @@
 * **自動化測試**：可連續執行指定回合數，並統計總分與平均分。  
 * **資料格式輸出**：提供純文字的盤面狀態字串，方便串接其他分析工具。
 
-##  快速開始 (Quick Start)
+## 快速開始 (Quick Start)
 
 ### **需求環境**
 
@@ -43,17 +43,10 @@
 最簡單的方式是直接執行控制器 (Controller)，它會跑一個範例實驗：
 
 ``` python
-python sdorica_api_controller.py
+python sdorica_api.py
 ```
 
-您將在終端機中看到彩色的魂盤輸出，以及 AI 每回合的決策過程：
-
-``` python
-[Turn 1] AI 決定執行: 4-orb-square  
-[操作成功] 顏色: GOLD, 形狀: 4-orb-square  
-   >消除: [(0, 0), (0, 1), (1, 0), (1, 1)]  
-   >魂盤結算完成 (向左重力 + 從右回填)  
-```
+您將在終端機中看到彩色的魂盤輸出，以及 AI 每回合的決策過程
 
 ## **檔案結構**
 
@@ -101,7 +94,7 @@ my_priority = {
 controller.setup_experiment(..., orb_bonus=9)
 ```
 
-##  未來展望
+## 未來展望
 
 * 實作 **Minimax** 或 **Expectimax** 演算法，引入搜尋深度 (Search Depth)，預測未來幾步的最佳路徑。  
 * 加入 **盤面狀態評估 (Heuristics)**，量化盤面的「潛力」與「雜亂度」。  
