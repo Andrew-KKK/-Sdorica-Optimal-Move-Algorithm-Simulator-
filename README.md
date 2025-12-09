@@ -98,4 +98,4 @@ controller.setup_experiment(..., orb_bonus=9)
 
 * 實作 **Minimax** 或 **Expectimax** 演算法，引入搜尋深度 (Search Depth)，預測未來幾步的最佳路徑。  
 * 加入 **盤面狀態評估 (Heuristics)**，量化盤面的「潛力」與「雜亂度」。  
-* 開發圖形化介面 (GUI)。
+* 優化使用介面 (GUI)。
