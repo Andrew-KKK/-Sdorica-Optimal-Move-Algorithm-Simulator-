@@ -1,195 +1,200 @@
-from typing import List, Dict, Optional
-
-# 1. 從模擬器檔案匯入 模擬器類別 和 顏色設定
-# [修正] Colors 已更名為 OrbColor
-from soul_board_simulator import SoulOrbSimulator
-
-# 2. 從演算法檔案匯入 求解器類別
+import time
+from typing import List, Dict, Optional, Any
+from soul_board_simulator import SoulOrbSimulator, OrbColor
 from move_algorithm import SdoricaSolver
 
 class SdoricaController:
     """
     Sdorica 實驗控制器 (API)。
-    作為使用者/GUI 與底層模擬器和演算法之間的中介。
+    用於執行自動化實驗、收集數據並驗證演算法表現。
     """
 
     def __init__(self):
         self.sim: Optional[SoulOrbSimulator] = None
         self.solver: Optional[SdoricaSolver] = None
         
-        # 實驗參數 (需要儲存在這裡，以便傳給 Solver)
+        # 實驗設定
         self.priority_list: Dict[str, int] = {}
         self.orb_bonus: int = 0
         
-        # 實驗狀態
+        # 統計數據
         self.turn_count = 0
         self.total_score = 0
-        self.history: List[str] = [] # 紀錄操作歷史
+        self.one_orb_count = 0   # 紀錄 1 消次數
+        self.two_orb_count = 0   # 紀錄 2 消次數
+        self.four_orb_count = 0  # 紀錄 4 消次數
+        self.history: List[str] = []
+        self.is_stuck = False
 
     def setup_experiment(self, 
                          seed: int, 
                          priority_list: Dict[str, int], 
                          orb_bonus: int = 9,
-                         skills: List[str] = []) -> None:
+                         skills: List[str] = None) -> None:
         """
-        設定並初始化一個新的實驗。
+        初始化實驗環境。
         """
-        # 1. 預設技能
         if skills is None:
+            # 預設支援常見的技能形狀
             skills = ["1-orb", "2-orb", "4-orb-square", "4-orb-L", "4-orb-I"]
             
-        # 2. 儲存參數
         self.priority_list = priority_list
         self.orb_bonus = orb_bonus
-
-        # 3. 初始化模擬器
-        # [修正] 直接傳入 orb_bonus 和 seed
         self.sim = SoulOrbSimulator(skills=skills, orb_bonus=orb_bonus, seed=seed)
-        
-        # 4. 初始化演算法
-        # [修正] Solver 現在是無狀態的，不需要在 init 傳參數
         self.solver = SdoricaSolver()
         
-        # 5. 重置狀態
+        # 重置統計
         self.turn_count = 0
         self.total_score = 0
+        self.one_orb_count = 0
+        self.two_orb_count = 0
+        self.four_orb_count = 0
         self.history = []
-        
-        print(f"實驗已初始化 (Seed: {seed})")
+        self.is_stuck = False
 
-    def run_turn(self) -> Dict:
+    def run_turn(self, verbose: bool = False) -> Dict[str, Any]:
         """
-        執行一個回合。
+        執行單一回合的 AI 決策。
         """
         if not self.sim or not self.solver:
-            raise RuntimeError("請先呼叫 setup_experiment 初始化實驗。")
+            raise RuntimeError("請先呼叫 setup_experiment。")
 
-        # 1. 演算法決策
-        # [修正] 需要將 priority_list 傳給 get_best_move_greedy
+        # 1. AI 決策
         best_move = self.solver.get_best_move_greedy(self.sim, self.priority_list)
         
         result = {
             "turn": self.turn_count + 1,
             "action": None,
             "score": 0,
-            "success": False,
-            "board_str": "" 
+            "success": False
         }
 
         if best_move:
-            # 計算分數
-            # [修正] 需要將 priority_list 和 orb_bonus 傳給 calculate_score
-            score = self.solver.calculate_score(best_move, self.priority_list, self.orb_bonus)
+            # 計算該步得分
+            move_score = self.solver.calculate_score(best_move, self.priority_list, self.orb_bonus)
             
             # 2. 執行操作
-            # [修正] handle_operation 會直接執行並返回 True/False
-            # 這裡我們不捕捉 print output，直接執行
-            print(f"\n[Turn {self.turn_count + 1}] AI 決定執行: {best_move['shape']}")
             success = self.sim.handle_operation(best_move['coords'])
             
             if success:
                 self.turn_count += 1
-                self.total_score += score
+                self.total_score += move_score
+                
+                # 紀錄各類消除次數
+                shape_str = best_move['shape']
+                if "4-orb" in shape_str:
+                    self.four_orb_count += 1
+                elif "2-orb" in shape_str:
+                    self.two_orb_count += 1
+                elif "1-orb" in shape_str:
+                    self.one_orb_count += 1
                 
                 action_desc = f"{best_move['shape']} ({best_move['color']})"
-                self.history.append(f"T{self.turn_count}: {action_desc} [+ {score}]")
+                self.history.append(f"T{self.turn_count}: {action_desc} [+ {move_score}]")
                 
-                result["action"] = action_desc
-                result["score"] = score
-                result["success"] = True
+                result.update({
+                    "action": action_desc,
+                    "score": move_score,
+                    "success": True
+                })
+                
+                if verbose:
+                    print(f"Turn {self.turn_count}: {action_desc} -> +{move_score} 分")
         else:
-            self.history.append(f"T{self.turn_count + 1}: 無可執行操作 (Stuck)")
-            print(f"\n[Turn {self.turn_count + 1}] 無可執行操作")
+            self.is_stuck = True
+            self.history.append(f"T{self.turn_count + 1}: 無可執行操作")
+            if verbose:
+                print(f"Turn {self.turn_count + 1}: [警告] 無法找到任何合法操作")
             
-        # 3. 取得執行後的盤面
-        result["board_str"] = self.get_board_state_str()
         return result
 
-    def run_auto(self, turns: int) -> List[Dict]:
-        """連續自動執行指定回合數。"""
-        results = []
-        for _ in range(turns):
-            res = self.run_turn()
-            results.append(res)
+    def run_experiment(self, max_turns: int = 50, verbose: bool = False) -> Dict[str, Any]:
+        """
+        執行完整的實驗流程。
+        """
+        start_time = time.time()
+        for _ in range(max_turns):
+            res = self.run_turn(verbose=verbose)
             if not res["success"]:
-                print("實驗中止：無可執行操作")
                 break
-        return results
-
-    def show_board(self):
-        """直接在終端機顯示盤面 (使用模擬器的漂亮輸出)。"""
-        if self.sim:
-            # [修正] 最新的 display_board 不需要參數，它會自動輸出彩色版
-            self.sim.display_board()
-        else:
-            print("Sim not initialized")
-
-    def get_board_state_str(self) -> str:
-        """
-        取得當前盤面的字串表示 (純資料格式)。
-        由於模擬器的 display_board 只負責列印，我們這裡手動構建字串。
-        """
-        if not self.sim:
-            return "Sim not initialized"
         
-        lines = []
-        for r in range(self.sim.rows):
-            # 取出每個魂芯顏色的第一個字母 (G, B, W)
-            row_str = " ".join(orb.color[0] for orb in self.sim.board[r])
-            lines.append(f"R{r}: {row_str}")
+        duration = time.time() - start_time
+        avg_score = self.total_score / self.turn_count if self.turn_count > 0 else 0
         
-        return "\n".join(lines)
-
-    def get_stats(self) -> Dict:
-        """取得當前實驗統計數據。"""
         return {
-            "turns": self.turn_count,
             "total_score": self.total_score,
-            "average_score": self.total_score / self.turn_count if self.turn_count > 0 else 0
+            "turns_completed": self.turn_count,
+            "one_orb_triggers": self.one_orb_count,
+            "two_orb_triggers": self.two_orb_count,
+            "four_orb_triggers": self.four_orb_count,
+            "average_per_turn": round(avg_score, 2),
+            "status": "Finished" if self.turn_count == max_turns else "Stuck",
+            "duration_ms": round(duration * 1000, 2)
         }
 
-# --- 範例使用 (Example Usage) ---
+    def get_board_state_str(self) -> str:
+        """取得純文字格式的盤面。"""
+        if not self.sim: return "未初始化"
+        return "\n".join([" ".join(orb.color[0] for orb in row) for row in self.sim.board])
+
+# --- 實驗指令區 ---
 if __name__ == "__main__":
-    controller = SdoricaController()
+    lab = SdoricaController()
     
-    # 定義優先序
-    my_priority = {
-        "1-orb": 10, 
-        "2-orb": 50, 
+    # 定義實驗組 A (標準優先序)
+    A_priority = {
+        "1-orb": 10,
+        "2-orb": 50,
         "4-orb-square": 100,
-        "4-orb-L": 80, 
-        "4-orb-I": 80
+    }
+    # 定義實驗組 B (激進大招優先序)
+    B_priority = {
+        "1-orb": 5,
+        "2-orb": 20,
+        "4-orb-square": 500,
     }
     
-    print("=== 測試: 初始化實驗 ===")
-    # 設定 seed=999, bonus=9
-    controller.setup_experiment(seed=999, priority_list=my_priority, orb_bonus=9)
-    controller.show_board()
-    
-    print("\n=== 測試: 執行單步 (Turn 1) ===")
-    res = controller.run_turn()
-    print(f"結果: {res['action']}, 得分: {res['score']}")
-    controller.show_board()
+    test_seed = 999
+    max_t = 500
 
-    # 測試純資料格式輸出
-    print("\n=== 測試: 純資料格式輸出 (get_board_state_str) ===")
-    data_str = controller.get_board_state_str()
-    print(data_str)
+    print("="*60)
+    print(f" 開始執行專題實驗 - 總回合設定: {max_t}")
+    print("="*60)
 
-    # 連續執行測試
-    print("\n=== 測試: 自動執行 5 回合 ===")
-    results = controller.run_auto(5)
+    # 執行實驗組 A
+    print("\n[實驗組 A] 設定: 平衡型策略")
+    lab.setup_experiment(seed=test_seed, priority_list=A_priority, orb_bonus=0)
+    results_a = lab.run_experiment(max_turns=max_t)
+
+    # 執行實驗組 B
+    print("\n[實驗組 B] 設定: 激進大招型策略")
+    lab.setup_experiment(seed=test_seed, priority_list=B_priority, orb_bonus=0)
+    results_b = lab.run_experiment(max_turns=max_t)
+
+    print("\n" + "="*60)
+    print(f" {'組別':<6} | {'總分':<6} | {'1消':<6} | {'2消':<5} | {'4消':<5} | {'平均分':<6} | {'狀態'}")
+    print("-" * 60)
     
-    print("\n=== 自動執行摘要 ===")
-    for r in results:
-        if r['success']:
-            print(f"Turn {r['turn']}: {r['action']} (+{r['score']})")
-        else:
-            print(f"Turn {r['turn']}: Failed/Stuck")
-        
-    # 統計
-    print("\n=== 實驗統計 ===")
-    stats = controller.get_stats()
-    print(f"總回合: {stats['turns']}")
-    print(f"總分: {stats['total_score']}")
-    print(f"平均分: {stats['average_score']:.2f}")
+    # 格式化輸出結果
+    fmt = "{name:<8} | {score:<8} | {o1:<6} | {o2:<6} | {o4:<6} | {avg:<9} | {status}"
+    
+    print(fmt.format(
+        name="A組", 
+        score=results_a['total_score'],
+        o1=results_a['one_orb_triggers'],
+        o2=results_a['two_orb_triggers'],
+        o4=results_a['four_orb_triggers'],
+        avg=results_a['average_per_turn'],
+        status=results_a['status']
+    ))
+    
+    print(fmt.format(
+        name="B組", 
+        score=results_b['total_score'],
+        o1=results_b['one_orb_triggers'],
+        o2=results_b['two_orb_triggers'],
+        o4=results_b['four_orb_triggers'],
+        avg=results_b['average_per_turn'],
+        status=results_b['status']
+    ))
+    print("="*60)

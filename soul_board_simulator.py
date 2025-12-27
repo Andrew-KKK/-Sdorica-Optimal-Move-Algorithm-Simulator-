@@ -220,7 +220,7 @@ class SoulOrbSimulator:
             for c in range(self.cols):
                 if self.board[r][c].color == OrbColor.EMPTY:
                     self.board[r][c] = self._create_orb("REFILL")
-        print("  > 魂盤結算完成 (向左重力 + 從右回填)")
+        print("  > 魂盤結算完成 (向左重力 + 右側回填)")
 
     def trigger_skill(self, shape_name: str, color: str):
         # 這裡也可以考慮用顏色顯示 color
@@ -240,3 +240,5 @@ if __name__ == "__main__":
     
     # 測試操作以查看 Log 中的顏色
     sim.handle_operation([(0,2), (1,2)])
+
+    sim.display_board()
